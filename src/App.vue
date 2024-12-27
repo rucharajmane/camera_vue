@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <h1>Camera Access App</h1>
+    <h1>Camera Access App with QR Code Capture</h1>
     <div>
       <video ref="video" autoplay playsinline></video>
     </div>
@@ -21,10 +21,15 @@
       />
       <span>{{ zoomLevel }}x</span>
     </div>
+    <div v-if="qrCodeData">
+      <h3>QR Code Data: {{ qrCodeData }}</h3>
+    </div>
   </div>
 </template>
 
 <script>
+import jsQR from "jsqr";
+
 export default {
   data() {
     return {
@@ -32,6 +37,8 @@ export default {
       videoElement: null, // Reference to the video element
       zoomLevel: 1, // Default zoom level
       currentTrack: null, // Store the current video track for zoom control
+      qrCodeData: null, // Stores the QR code data when detected
+      canvas: null, // Canvas element for scanning QR codes
     };
   },
   methods: {
@@ -68,6 +75,9 @@ export default {
 
           // Get the video track for zoom control
           this.currentTrack = stream.getVideoTracks()[0];
+
+          // Start scanning the QR codes
+          this.startQRCodeScanning();
         })
         .catch((error) => {
           console.error("Error accessing camera:", error);
@@ -81,13 +91,58 @@ export default {
         const capabilities = this.currentTrack.getCapabilities();
         if (capabilities.zoom) {
           const zoom = this.zoomLevel;
-          this.currentTrack.applyConstraints({
-            advanced: [{ zoom: zoom }],
-          }).catch((error) => {
-            console.error("Error applying zoom:", error);
-          });
+          this.currentTrack
+            .applyConstraints({
+              advanced: [{ zoom: zoom }],
+            })
+            .catch((error) => {
+              console.error("Error applying zoom:", error);
+            });
         }
       }
+    },
+    startQRCodeScanning() {
+      this.canvas = document.createElement("canvas");
+      const context = this.canvas.getContext("2d");
+
+      const scanQRCode = () => {
+        if (this.videoElement && this.videoElement.videoWidth > 0) {
+          this.canvas.width = this.videoElement.videoWidth;
+          this.canvas.height = this.videoElement.videoHeight;
+          context.drawImage(
+            this.videoElement,
+            0,
+            0,
+            this.canvas.width,
+            this.canvas.height
+          );
+
+          const imageData = context.getImageData(
+            0,
+            0,
+            this.canvas.width,
+            this.canvas.height
+          );
+          const code = jsQR(
+            imageData.data,
+            this.canvas.width,
+            this.canvas.height,
+            {
+              inversionAttempts: "dontInvert",
+            }
+          );
+
+          if (code) {
+            this.qrCodeData = code.data; // Store QR code data
+          } else {
+            this.qrCodeData = null; // Reset QR code data if no code is detected
+          }
+        }
+
+        requestAnimationFrame(scanQRCode);
+      };
+
+      scanQRCode(); // Start scanning
     },
   },
   mounted() {
@@ -140,5 +195,10 @@ span {
   font-size: 18px;
   font-weight: bold;
   margin-left: 10px;
+}
+
+h3 {
+  color: #2f8a56;
+  font-size: 20px;
 }
 </style>
