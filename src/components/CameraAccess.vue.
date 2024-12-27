@@ -1,0 +1,106 @@
+<template>
+  <div>
+    <div v-if="!hasAccess">
+      <p>Requesting camera access...</p>
+    </div>
+    <div v-else>
+      <video ref="video" width="100%" autoplay></video>
+      <div>
+        <button @click="toggleCamera">Flip Camera</button>
+        <button @click="zoomIn">Zoom In</button>
+        <button @click="zoomOut">Zoom Out</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return { 
+      videoStream: null,
+      currentStream: null,
+      hasAccess: false,
+      currentCamera: 'environment', // front or back camera
+      zoomLevel: 1,
+    };
+  },
+  methods: {
+    async initCamera() {
+      try {
+        const constraints = {
+          video: {
+            facingMode: this.currentCamera, // 'user' for front camera, 'environment' for back camera
+            zoom: this.zoomLevel, // Zoom level, it can be adjusted by constraints (if supported)
+          },
+        };
+
+        // Get the camera stream
+        this.videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        this.$refs.video.srcObject = this.videoStream;
+        this.hasAccess = true;
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+      }
+    },
+    toggleCamera() {
+      // Toggle between front and back cameras
+      this.currentCamera = this.currentCamera === 'user' ? 'environment' : 'user';
+      this.stopStream();
+      this.initCamera();
+    },
+    zoomIn() {
+      // Zoom in (if the camera supports zoom functionality)
+      if (this.videoStream && this.videoStream.getVideoTracks().length > 0) {
+        const track = this.videoStream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        if (capabilities.zoom) {
+          this.zoomLevel = Math.min(this.zoomLevel + 0.1, capabilities.maxZoom);
+          this.applyZoom();
+        }
+      }
+    },
+    zoomOut() {
+      // Zoom out (if the camera supports zoom functionality)
+      if (this.videoStream && this.videoStream.getVideoTracks().length > 0) {
+        const track = this.videoStream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        if (capabilities.zoom) {
+          this.zoomLevel = Math.max(this.zoomLevel - 0.1, capabilities.minZoom);
+          this.applyZoom();
+        }
+      }
+    },
+    applyZoom() {
+      if (this.videoStream && this.videoStream.getVideoTracks().length > 0) {
+        const track = this.videoStream.getVideoTracks()[0];
+        const constraints = {
+          advanced: [{ zoom: this.zoomLevel }],
+        };
+        track.applyConstraints(constraints);
+      }
+    },
+    stopStream() {
+      if (this.videoStream) {
+        const tracks = this.videoStream.getTracks();
+        tracks.forEach(track => track.stop());
+        this.videoStream = null;
+        this.hasAccess = false;
+      }
+    },
+  },
+  mounted() {
+    this.initCamera();
+  },
+  beforeDestroy() {
+    this.stopStream();
+  },
+};
+</script>
+
+<style scoped>
+video {
+  max-width: 100%;
+  max-height: 100%;
+}
+</style>
